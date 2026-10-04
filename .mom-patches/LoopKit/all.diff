@@ -1,0 +1,243 @@
+diff --git a/LoopKitUI/Resources/Localizable.xcstrings b/LoopKitUI/Resources/Localizable.xcstrings
+index 6d7fe960..17d5f3e7 100644
+--- a/LoopKitUI/Resources/Localizable.xcstrings
++++ b/LoopKitUI/Resources/Localizable.xcstrings
+@@ -1005,6 +1005,15 @@
+         }
+       }
+     },
++    "%.2f U/day" : {
++      "comment" : "Format for total daily scheduled basal"
++    },
++    "%.2f U/hr" : {
++      "comment" : "Y-axis label for the highest basal rate on the graph"
++    },
++    "%.2f units per day" : {
++      "comment" : "Accessibility value for total daily basal"
++    },
+     "%@" : {
+       "localizations" : {
+         "ar" : {
+@@ -4194,6 +4203,21 @@
+         }
+       }
+     },
++    "6a" : {
++      "comment" : "6 AM label on basal schedule graph"
++    },
++    "6p" : {
++      "comment" : "6 PM label on basal schedule graph"
++    },
++    "12a" : {
++      "comment" : "Midnight label on basal schedule graph\nNext midnight label on basal schedule graph"
++    },
++    "12p" : {
++      "comment" : "Noon label on basal schedule graph"
++    },
++    "24-Hour Profile" : {
++      "comment" : "Title for basal schedule graph"
++    },
+     "A Correction Range is different. This will be a narrower range." : {
+       "comment" : "Information about differences between target range and correction range",
+       "localizations" : {
+@@ -5369,6 +5393,9 @@
+         }
+       }
+     },
++    "Add rates to see the daily graph." : {
++      "comment" : "Empty-state text for basal schedule graph"
++    },
+     "Afrezza" : {
+       "comment" : "Title of insulin model preset - afrezza",
+       "localizations" : {
+@@ -6257,6 +6284,9 @@
+         }
+       }
+     },
++    "Basal schedule graph" : {
++      "comment" : "Accessibility label for basal schedule graph"
++    },
+     "Basal, bolus, and correction insulin dose amounts are decreased by %@%%." : {
+       "comment" : "Describes a percentage decrease in overall insulin needs",
+       "localizations" : {
+diff --git a/LoopKitUI/Views/QuantityScheduleEditor.swift b/LoopKitUI/Views/QuantityScheduleEditor.swift
+index 6bdac23a..f2fe0306 100644
+--- a/LoopKitUI/Views/QuantityScheduleEditor.swift
++++ b/LoopKitUI/Views/QuantityScheduleEditor.swift
+@@ -90,7 +90,8 @@ struct QuantityScheduleEditor<ActionAreaContent: View>: View {
+             },
+             mode: mode,
+             therapySettingType: settingType,
+-            hasUnsupportedValue: hasUnsupportedValue
++            hasUnsupportedValue: hasUnsupportedValue,
++            scheduleProfileRates: scheduleProfileRates
+         )
+         .simultaneousGesture(TapGesture().onEnded {
+             withAnimation {
+@@ -103,6 +104,11 @@ struct QuantityScheduleEditor<ActionAreaContent: View>: View {
+         crossedThresholds.isEmpty ? .notRequired : .required(confirmationAlertContent)
+     }
+ 
++    private var scheduleProfileRates: [RepeatingScheduleValue<Double>]? {
++        guard case .basalRate = settingType else { return nil }
++        return scheduleItems.map { RepeatingScheduleValue(startTime: $0.startTime, value: $0.value.doubleValue(for: unit)) }
++    }
++
+     private var unitLabelWidth: CGFloat {
+         let attributedUnitString = NSAttributedString(
+             string: unit.shortLocalizedUnitString(),
+diff --git a/LoopKitUI/Views/ScheduleEditor.swift b/LoopKitUI/Views/ScheduleEditor.swift
+index 613a953a..0b2d3ece 100644
+--- a/LoopKitUI/Views/ScheduleEditor.swift
++++ b/LoopKitUI/Views/ScheduleEditor.swift
+@@ -51,6 +51,7 @@ struct ScheduleEditor<Value: Equatable, ValueContent: View, ValuePicker: View, A
+     var mode: SettingsPresentationMode
+     var therapySettingType: TherapySetting
+     var hasUnsupportedValue: ([RepeatingScheduleValue<Value>]) -> Bool
++    var scheduleProfileRates: [RepeatingScheduleValue<Double>]?
+     
+     @State var editingIndex: Int?
+ 
+@@ -92,7 +93,8 @@ struct ScheduleEditor<Value: Equatable, ValueContent: View, ValuePicker: View, A
+         savingMechanism: SavingMechanism<[RepeatingScheduleValue<Value>]>,
+         mode: SettingsPresentationMode = .settings,
+         therapySettingType: TherapySetting = .none,
+-        hasUnsupportedValue:  @escaping ([RepeatingScheduleValue<Value>]) -> Bool = { _ in false }
++        hasUnsupportedValue:  @escaping ([RepeatingScheduleValue<Value>]) -> Bool = { _ in false },
++        scheduleProfileRates: [RepeatingScheduleValue<Double>]? = nil
+     ) {
+         self.title = title
+         self.description = description
+@@ -108,6 +110,7 @@ struct ScheduleEditor<Value: Equatable, ValueContent: View, ValuePicker: View, A
+         self.mode = mode
+         self.therapySettingType = therapySettingType
+         self.hasUnsupportedValue = hasUnsupportedValue
++        self.scheduleProfileRates = scheduleProfileRates
+     }
+ 
+     var body: some View {
+@@ -196,6 +199,9 @@ struct ScheduleEditor<Value: Equatable, ValueContent: View, ValuePicker: View, A
+             actionButtonState: saveButtonState,
+             cards: {
+                 Card {
++                    if let scheduleProfileRates {
++                        BasalScheduleProfileChart(items: scheduleProfileRates)
++                    }
+                     SettingDescription(text: description, informationalContent: {self.therapySettingType.helpScreen()})
+                     Splat(Array(scheduleItems.enumerated()), id: \.element.startTime) { index, item in
+                         self.itemView(for: item, at: index)
+@@ -483,3 +489,114 @@ extension ScheduleEditor.PresentedAlert: Identifiable {
+         }
+     }
+ }
++
++public struct BasalScheduleProfileChart: View {
++    @Environment(\.insulinTintColor) private var insulinTintColor
++
++    private let items: [RepeatingScheduleValue<Double>]
++
++    public init(items: [RepeatingScheduleValue<Double>]) {
++        self.items = items.sorted { $0.startTime < $1.startTime }
++    }
++
++    private struct Segment: Identifiable {
++        let id: TimeInterval
++        let startHour: Double
++        let endHour: Double
++        let rate: Double
++    }
++
++    private var segments: [Segment] {
++        guard !items.isEmpty else { return [] }
++
++        return items.enumerated().map { index, item in
++            let startHour = item.startTime / .hours(1)
++            let endHour = index + 1 < items.count
++                ? items[index + 1].startTime / .hours(1)
++                : 24
++            return Segment(id: item.startTime, startHour: startHour, endHour: endHour, rate: item.value)
++        }
++    }
++
++    private var totalDailyDose: Double {
++        segments.reduce(0) { $0 + $1.rate * ($1.endHour - $1.startHour) }
++    }
++
++    private var maxRate: Double {
++        max(segments.map(\.rate).max() ?? 1, 0.5)
++    }
++
++    public var body: some View {
++        VStack(alignment: .leading, spacing: 10) {
++            HStack(alignment: .firstTextBaseline) {
++                Text(LocalizedString("24-Hour Profile", comment: "Title for basal schedule graph"))
++                    .font(.subheadline)
++                    .bold()
++                Spacer()
++                Text(String(format: LocalizedString("%.2f U/day", comment: "Format for total daily scheduled basal"), totalDailyDose))
++                    .font(.subheadline)
++                    .foregroundColor(.secondary)
++            }
++
++            if segments.isEmpty {
++                Text(LocalizedString("Add rates to see the daily graph.", comment: "Empty-state text for basal schedule graph"))
++                    .font(.footnote)
++                    .foregroundColor(.secondary)
++                    .frame(maxWidth: .infinity, minHeight: 120, alignment: .center)
++            } else {
++                GeometryReader { geometry in
++                    let plotHeight = geometry.size.height - 22
++                    let plotWidth = geometry.size.width
++                    ZStack(alignment: .bottomLeading) {
++                        ForEach([0.25, 0.5, 0.75, 1.0], id: \.self) { fraction in
++                            Path { path in
++                                let y = plotHeight * (1 - fraction)
++                                path.move(to: CGPoint(x: 0, y: y))
++                                path.addLine(to: CGPoint(x: plotWidth, y: y))
++                            }
++                            .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
++                        }
++
++                        HStack(alignment: .bottom, spacing: 0) {
++                            ForEach(segments) { segment in
++                                let width = plotWidth * (segment.endHour - segment.startHour) / 24
++                                let height = plotHeight * (segment.rate / maxRate)
++                                VStack(spacing: 0) {
++                                    Spacer(minLength: 0)
++                                    RoundedRectangle(cornerRadius: 3, style: .continuous)
++                                        .fill(insulinTintColor)
++                                        .frame(height: max(height, segment.rate > 0 ? 3 : 0))
++                                }
++                                .frame(width: max(width - 1.5, 1), height: plotHeight, alignment: .bottom)
++                            }
++                        }
++
++                        Text(String(format: LocalizedString("%.2f U/hr", comment: "Y-axis label for the highest basal rate on the graph"), maxRate))
++                            .font(.caption2)
++                            .foregroundColor(.secondary)
++                            .offset(y: -plotHeight + 12)
++                    }
++                    .frame(height: plotHeight, alignment: .bottom)
++                }
++                .frame(height: 132)
++
++                HStack {
++                    Text(LocalizedString("12a", comment: "Midnight label on basal schedule graph"))
++                    Spacer()
++                    Text(LocalizedString("6a", comment: "6 AM label on basal schedule graph"))
++                    Spacer()
++                    Text(LocalizedString("12p", comment: "Noon label on basal schedule graph"))
++                    Spacer()
++                    Text(LocalizedString("6p", comment: "6 PM label on basal schedule graph"))
++                    Spacer()
++                    Text(LocalizedString("12a", comment: "Next midnight label on basal schedule graph"))
++                }
++                .font(.caption2)
++                .foregroundColor(.secondary)
++            }
++        }
++        .accessibilityElement(children: .combine)
++        .accessibilityLabel(Text(LocalizedString("Basal schedule graph", comment: "Accessibility label for basal schedule graph")))
++        .accessibilityValue(Text(String(format: LocalizedString("%.2f units per day", comment: "Accessibility value for total daily basal"), totalDailyDose)))
++    }
++}

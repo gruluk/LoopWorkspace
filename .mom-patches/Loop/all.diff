@@ -1,0 +1,1606 @@
+diff --git a/Common/FeatureFlags.swift b/Common/FeatureFlags.swift
+index 36337330..0ba545ab 100644
+--- a/Common/FeatureFlags.swift
++++ b/Common/FeatureFlags.swift
+@@ -40,6 +40,7 @@ struct FeatureFlagConfiguration: Decodable {
+     let missedMealNotifications: Bool
+     let allowAlgorithmExperiments: Bool
+     let devBranchWarningEnabled: Bool
++    let simpleInsulinDeliveryMode: Bool
+ 
+ 
+     fileprivate init() {
+@@ -189,13 +190,13 @@ struct FeatureFlagConfiguration: Decodable {
+         #endif
+ 
+         // Swift compiler config is inverse, since the default state is enabled.
+-        #if SIRI_DISABLED
++        #if SIMPLE_INSULIN_DELIVERY_MODE || SIRI_DISABLED
+         self.siriEnabled = false
+         #else
+         self.siriEnabled = true
+         #endif
+         
+-        #if SIMPLE_BOLUS_CALCULATOR_ENABLED
++        #if SIMPLE_INSULIN_DELIVERY_MODE || SIMPLE_BOLUS_CALCULATOR_ENABLED
+         self.simpleBolusCalculatorEnabled = true
+         #else
+         self.simpleBolusCalculatorEnabled = false
+@@ -222,7 +223,7 @@ struct FeatureFlagConfiguration: Decodable {
+         #endif
+ 
+         // Missed meal notifications compiler flag is inverse, since the default state is enabled.
+-        #if MISSED_MEAL_NOTIFICATIONS_DISABLED
++        #if SIMPLE_INSULIN_DELIVERY_MODE || MISSED_MEAL_NOTIFICATIONS_DISABLED
+         self.missedMealNotifications = false
+         #else
+         self.missedMealNotifications = true
+@@ -240,6 +241,12 @@ struct FeatureFlagConfiguration: Decodable {
+         #else
+         self.devBranchWarningEnabled = true
+         #endif
++
++        #if SIMPLE_INSULIN_DELIVERY_MODE
++        self.simpleInsulinDeliveryMode = true
++        #else
++        self.simpleInsulinDeliveryMode = false
++        #endif
+     }
+ }
+ 
+@@ -276,6 +283,7 @@ extension FeatureFlagConfiguration : CustomDebugStringConvertible {
+             "* missedMealNotifications: \(missedMealNotifications)",
+             "* allowAlgorithmExperiments: \(allowAlgorithmExperiments)",
+             "* devBranchWarningEnabled: \(devBranchWarningEnabled)",
++            "* simpleInsulinDeliveryMode: \(simpleInsulinDeliveryMode)",
+             "* allowExperimentalFeatures: \(allowExperimentalFeatures)"
+         ].joined(separator: "\n")
+     }
+diff --git a/Loop.xcodeproj/project.pbxproj b/Loop.xcodeproj/project.pbxproj
+index dfcb0b95..f0b0ea4c 100644
+--- a/Loop.xcodeproj/project.pbxproj
++++ b/Loop.xcodeproj/project.pbxproj
+@@ -490,6 +490,7 @@
+ 		C1D476B42A8ED179002C1C87 /* LoopAlgorithmTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D476B32A8ED179002C1C87 /* LoopAlgorithmTests.swift */; };
+ 		C1D6EEA02A06C7270047DE5C /* MKRingProgressView in Frameworks */ = {isa = PBXBuildFile; productRef = C1D6EE9F2A06C7270047DE5C /* MKRingProgressView */; };
+ 		C1DE5D23251BFC4D00439E49 /* SimpleBolusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1DE5D22251BFC4D00439E49 /* SimpleBolusView.swift */; };
++		A84F01A02F80000100A00002 /* SimpleHomeDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A84F01A02F80000100A00001 /* SimpleHomeDashboardView.swift */; };
+ 		C1E2773E224177C000354103 /* ClockKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C1E2773D224177C000354103 /* ClockKit.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
+ 		C1E3862628247C6100F561A4 /* StoredLoopNotRunningNotification.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1E3862428247B7100F561A4 /* StoredLoopNotRunningNotification.swift */; };
+ 		C1E3DC4928595FAA00CA19FF /* SwiftCharts in Embed Frameworks */ = {isa = PBXBuildFile; productRef = C1E3DC4628595FAA00CA19FF /* SwiftCharts */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+@@ -1312,6 +1313,7 @@
+ 		C1D476B32A8ED179002C1C87 /* LoopAlgorithmTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoopAlgorithmTests.swift; sourceTree = "<group>"; };
+ 		C1DA986B2843B6F9001D04CC /* PersistedProperty.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistedProperty.swift; sourceTree = "<group>"; };
+ 		C1DE5D22251BFC4D00439E49 /* SimpleBolusView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SimpleBolusView.swift; sourceTree = "<group>"; };
++		A84F01A02F80000100A00001 /* SimpleHomeDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleHomeDashboardView.swift; sourceTree = "<group>"; };
+ 		C1E2773D224177C000354103 /* ClockKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ClockKit.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS.sdk/System/Library/Frameworks/ClockKit.framework; sourceTree = DEVELOPER_DIR; };
+ 		C1E2774722433D7A00354103 /* MKRingProgressView.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = MKRingProgressView.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+ 		C1E3862428247B7100F561A4 /* StoredLoopNotRunningNotification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoredLoopNotRunningNotification.swift; sourceTree = "<group>"; };
+@@ -1996,6 +1998,7 @@
+ 				1DE09BA824A3E23F009EE9F9 /* SettingsView.swift */,
+ 				DDC389FB2A2BC6670066E2E8 /* SettingsView+algorithmExperimentsSection.swift */,
+ 				C1DE5D22251BFC4D00439E49 /* SimpleBolusView.swift */,
++				A84F01A02F80000100A00001 /* SimpleHomeDashboardView.swift */,
+ 				43F64DD81D9C92C900D24DC6 /* TitleSubtitleTableViewCell.swift */,
+ 				4311FB9A1F37FE1B00D4C0A7 /* TitleSubtitleTextFieldTableViewCell.swift */,
+ 				C1AF062229426300002C1B19 /* ManualGlucoseEntryRow.swift */,
+@@ -3541,6 +3544,7 @@
+ 				4328E0331CFC091100E199AA /* WatchContext+LoopKit.swift in Sources */,
+ 				4F526D611DF8D9A900A04910 /* NetBasal.swift in Sources */,
+ 				C1DE5D23251BFC4D00439E49 /* SimpleBolusView.swift in Sources */,
++				A84F01A02F80000100A00002 /* SimpleHomeDashboardView.swift in Sources */,
+ 				89ADE13B226BFA0F0067222B /* TestingScenariosManager.swift in Sources */,
+ 				4F7E8ACB20E2ACB500AEA65E /* WatchPredictedGlucose.swift in Sources */,
+ 				436A0DA51D236A2A00104B24 /* LoopError.swift in Sources */,
+diff --git a/Loop.xcodeproj/xcshareddata/xcschemes/WatchApp.xcscheme b/Loop.xcodeproj/xcshareddata/xcschemes/WatchApp.xcscheme
+index 6ab6be02..e2a16608 100644
+--- a/Loop.xcodeproj/xcshareddata/xcschemes/WatchApp.xcscheme
++++ b/Loop.xcodeproj/xcshareddata/xcschemes/WatchApp.xcscheme
+@@ -94,7 +94,6 @@
+             BuildableIdentifier = "primary"
+             BlueprintIdentifier = "43A943711B926B7B0051FA24"
+             BuildableName = "WatchApp.app"
+-            BlueprintName = "WatchApp"
+             ReferencedContainer = "container:Loop.xcodeproj">
+          </BuildableReference>
+       </BuildableProductRunnable>
+@@ -112,7 +111,6 @@
+             BuildableIdentifier = "primary"
+             BlueprintIdentifier = "43A943711B926B7B0051FA24"
+             BuildableName = "WatchApp.app"
+-            BlueprintName = "WatchApp"
+             ReferencedContainer = "container:Loop.xcodeproj">
+          </BuildableReference>
+       </BuildableProductRunnable>
+diff --git a/Loop/Extensions/DeviceDataManager+DeviceStatus.swift b/Loop/Extensions/DeviceDataManager+DeviceStatus.swift
+index fbcf52b9..757e85e8 100644
+--- a/Loop/Extensions/DeviceDataManager+DeviceStatus.swift
++++ b/Loop/Extensions/DeviceDataManager+DeviceStatus.swift
+@@ -18,6 +18,9 @@ extension DeviceDataManager {
+         } else if bluetoothState == .poweredOff {
+             return BluetoothState.offHighlight
+         } else if cgmManager == nil {
++            if FeatureFlags.simpleInsulinDeliveryMode {
++                return nil
++            }
+             return DeviceDataManager.addCGMStatusHighlight
+         } else {
+             return (cgmManager as? CGMManagerUI)?.cgmStatusHighlight
+@@ -82,6 +85,8 @@ extension DeviceDataManager {
+     func didTapOnCGMStatus(_ view: BaseHUDView? = nil) -> HUDTapAction? {
+         if let action = bluetoothProvider.bluetoothState.action {
+             return action
++        } else if FeatureFlags.simpleInsulinDeliveryMode, cgmManager == nil {
++            return .takeNoAction
+         } else if let url = cgmManager?.appURL,
+             UIApplication.shared.canOpenURL(url)
+         {
+diff --git a/Loop/Localizable.xcstrings b/Loop/Localizable.xcstrings
+index 1af4612a..8ea31244 100644
+--- a/Loop/Localizable.xcstrings
++++ b/Loop/Localizable.xcstrings
+@@ -3172,6 +3172,9 @@
+         }
+       }
+     },
++    "%d%% of usual basal" : {
++      "comment" : "Activity level basal percentage"
++    },
+     "⚠️" : {
+       "localizations" : {
+         "da" : {
+@@ -3236,6 +3239,18 @@
+         }
+       }
+     },
++    "1 hour" : {
++      "comment" : "One hour activity duration"
++    },
++    "2 hours" : {
++      "comment" : "Two hour activity duration"
++    },
++    "4 hours" : {
++      "comment" : "Four hour activity duration"
++    },
++    "8 hours" : {
++      "comment" : "Eight hour activity duration"
++    },
+     "15 min glucose regression coefficient (b₁), continued with decay over 30 min" : {
+       "comment" : "Description of the prediction input effect for glucose momentum",
+       "localizations" : {
+@@ -3480,6 +3495,9 @@
+         }
+       }
+     },
++    "100% keeps the usual daily basal. Lower this for exercise." : {
++      "comment" : "Explanation of activity basal percentage"
++    },
+     "A few seconds remaining" : {
+       "comment" : "Estimated remaining duration with a few seconds",
+       "localizations" : {
+@@ -4427,6 +4445,9 @@
+         }
+       }
+     },
++    "Active" : {
++      "comment" : "Default activity level name for being active"
++    },
+     "Active Carbohydrates" : {
+       "comment" : "The title of the Carbs On-Board graph",
+       "localizations" : {
+@@ -4810,7 +4831,7 @@
+       }
+     },
+     "Active Insulin" : {
+-      "comment" : "Details for missing data error when active insulin amount is missing\nThe title of the Insulin On-Board graph\nTitle describing quantity of still-absorbing insulin",
++      "comment" : "Details for missing data error when active insulin amount is missing\nHome screen title for insulin on board\nThe title of the Insulin On-Board graph\nTitle describing quantity of still-absorbing insulin",
+       "localizations" : {
+         "ar" : {
+           "stringUnit" : {
+@@ -5066,6 +5087,12 @@
+         }
+       }
+     },
++    "Activity" : {
++      "comment" : "Home screen title for activity levels"
++    },
++    "Add" : {
++      "comment" : "Button to add an activity level"
++    },
+     "Add a new favorite food" : {
+       "comment" : "Button label to open new favorite food view",
+       "localizations" : {
+@@ -5131,6 +5158,9 @@
+         }
+       }
+     },
++    "Add Activity" : {
++      "comment" : "Title for adding an activity level"
++    },
+     "Add Carb Entry" : {
+       "comment" : "Title of the user activity for adding carbs",
+       "localizations" : {
+@@ -8607,6 +8637,9 @@
+         }
+       }
+     },
++    "Basal amount" : {
++      "comment" : "Section title for activity basal percentage"
++    },
+     "Basal Rate Schedule" : {
+       "comment" : "Details for configuration error when basal rate schedule is missing",
+       "localizations" : {
+@@ -9334,7 +9367,7 @@
+       }
+     },
+     "Bolus" : {
+-      "comment" : "Label for bolus entry row on bolus screen\nLabel for bolus entry row on simple bolus screen\nThe label of the bolus entry button\nTitle for bolus entry screen",
++      "comment" : "Label for bolus entry row on bolus screen\nLabel for bolus entry row on simple bolus screen\nThe label of the bolus entry button\nTitle for bolus entry screen\nTitle of bolus view in simple insulin delivery mode",
+       "localizations" : {
+         "ar" : {
+           "stringUnit" : {
+@@ -10131,7 +10164,7 @@
+       }
+     },
+     "Cancel" : {
+-      "comment" : "Button label for cancel\nButton text to cancel\nCancel button for reset loop alert\nCancel export button title\nThe title of the cancel action in an action sheet",
++      "comment" : "Button label for cancel\nButton text to cancel\nCancel activity editor\nCancel button for reset loop alert\nCancel export button title\nThe title of the cancel action in an action sheet",
+       "localizations" : {
+         "ar" : {
+           "stringUnit" : {
+@@ -12103,6 +12136,9 @@
+         }
+       }
+     },
++    "Chilling" : {
++      "comment" : "Default activity level name for resting\nPlaceholder for a new activity level name"
++    },
+     "Choose a longer absorption time for larger meals, or those containing fats and proteins. This is only guidance to the algorithm and need not be exact." : {
+       "comment" : "Carb entry section footer text explaining absorption time",
+       "localizations" : {
+@@ -14757,6 +14793,12 @@
+         }
+       }
+     },
++    "Daily Basal" : {
++      "comment" : "Home screen title for the basal schedule graph"
++    },
++    "Daily Basal Schedule" : {
++      "comment" : "Title text for button to daily basal schedule"
++    },
+     "Date" : {
+       "comment" : "Date picker label",
+       "localizations" : {
+@@ -15309,6 +15351,9 @@
+         }
+       }
+     },
++    "Delete Activity" : {
++      "comment" : "Button to delete an activity level"
++    },
+     "Delete All" : {
+       "comment" : "Button title to delete all objects",
+       "localizations" : {
+@@ -16406,6 +16451,9 @@
+         }
+       }
+     },
++    "Different rates throughout the day" : {
++      "comment" : "Descriptive text for daily basal schedule"
++    },
+     "Disables" : {
+       "comment" : "The action hint of the workout mode toggle button when enabled",
+       "localizations" : {
+@@ -17063,6 +17111,9 @@
+         }
+       }
+     },
++    "Duration" : {
++      "comment" : "Picker title for activity duration"
++    },
+     "Duration exceeds: %1$.1f hours" : {
+       "comment" : "Override error description: duration exceed max (1: max duration in hours).",
+       "localizations" : {
+@@ -17140,6 +17191,9 @@
+         }
+       }
+     },
++    "Edit Activity" : {
++      "comment" : "Title for editing an activity level"
++    },
+     "Enable\nBluetooth" : {
+       "comment" : "Message to the user to enable bluetooth",
+       "localizations" : {
+@@ -21223,6 +21277,9 @@
+         }
+       }
+     },
++    "Hold an activity to edit it." : {
++      "comment" : "Hint explaining how to edit a home screen activity level"
++    },
+     "How can I silence non-Critical Alerts?" : {
+       "localizations" : {
+         "da" : {
+@@ -21398,6 +21455,9 @@
+         }
+       }
+     },
++    "How long" : {
++      "comment" : "Section title for activity duration"
++    },
+     "How to update (LoopDocs)" : {
+       "comment" : "The title text for how to update",
+       "localizations" : {
+@@ -21890,7 +21950,7 @@
+       }
+     },
+     "Insulin" : {
+-      "comment" : "Title of the prediction input effect for insulin",
++      "comment" : "The title of the simplified insulin section in settings\nTitle of the prediction input effect for insulin",
+       "localizations" : {
+         "ar" : {
+           "stringUnit" : {
+@@ -24157,6 +24217,9 @@
+         }
+       }
+     },
++    "Last Bolus" : {
++      "comment" : "Home screen title for most recent bolus"
++    },
+     "Launches CGM app" : {
+       "comment" : "Glucose HUD accessibility hint",
+       "extractionState" : "manual",
+@@ -26154,7 +26217,7 @@
+       }
+     },
+     "Maximum Bolus" : {
+-      "comment" : "Details for configuration error when maximum bolus is missing",
++      "comment" : "Details for configuration error when maximum bolus is missing\nTitle text for button to delivery limits",
+       "localizations" : {
+         "da" : {
+           "stringUnit" : {
+@@ -27377,7 +27440,7 @@
+       }
+     },
+     "Name" : {
+-      "comment" : "Label for name row on add favorite food screen",
++      "comment" : "Label for name row on add favorite food screen\nSection title for activity level name",
+       "localizations" : {
+         "ar" : {
+           "stringUnit" : {
+@@ -28827,6 +28890,12 @@
+         }
+       }
+     },
++    "None yet" : {
++      "comment" : "Home screen value when no bolus has been given"
++    },
++    "Normal" : {
++      "comment" : "Activity level that uses the usual basal schedule"
++    },
+     "Notification Delivery" : {
+       "comment" : "Notification Delivery Status text",
+       "localizations" : {
+@@ -29325,6 +29394,9 @@
+         }
+       }
+     },
++    "Now %@ U/hr" : {
++      "comment" : "Current basal rate on the home screen"
++    },
+     "Off" : {
+       "comment" : "Notification Setting Status is Off",
+       "localizations" : {
+@@ -33522,6 +33594,12 @@
+         }
+       }
+     },
++    "Remove" : {
++      "comment" : "Button to confirm pump removal"
++    },
++    "Remove Pump" : {
++      "comment" : "Button to remove the current pump\nTitle of alert to remove the current pump"
++    },
+     "Reservoir" : {
+       "comment" : "Segmented button title for insulin delivery log reservoir history",
+       "localizations" : {
+@@ -33955,7 +34033,11 @@
+         }
+       }
+     },
++    "Safety limit for each bolus" : {
++      "comment" : "Descriptive text for delivery limits in simple mode"
++    },
+     "Save" : {
++      "comment" : "Save activity editor",
+       "localizations" : {
+         "da" : {
+           "stringUnit" : {
+@@ -34562,6 +34644,9 @@
+         }
+       }
+     },
++    "Set a schedule" : {
++      "comment" : "Home screen prompt when no basal schedule exists"
++    },
+     "Settings" : {
+       "comment" : "Label of button that navigation user to iOS Settings\nSettings screen title\nThe label of the settings button",
+       "localizations" : {
+@@ -35734,6 +35819,9 @@
+         }
+       }
+     },
++    "Still working" : {
++      "comment" : "Home screen caption for active insulin"
++    },
+     "Support" : {
+       "comment" : "Section title for Support\nThe title of the support section in settings",
+       "localizations" : {
+@@ -38073,6 +38161,9 @@
+         }
+       }
+     },
++    "This removes the current pump so you can add a different one." : {
++      "comment" : "Confirmation message before removing the current pump"
++    },
+     "Time Sensitive Alerts" : {
+       "localizations" : {
+         "da" : {
+@@ -38824,6 +38915,9 @@
+         }
+       }
+     },
++    "Unable to save basal schedule" : {
++      "comment" : "Error when a basal schedule cannot be saved without a pump"
++    },
+     "Unable to Save Carb Entry" : {
+       "comment" : "Alert title for a carb entry persistence error",
+       "localizations" : {
+@@ -39791,6 +39885,9 @@
+         }
+       }
+     },
++    "Until %@" : {
++      "comment" : "Home screen subtitle for a timed activity level"
++    },
+     "Until %1$@" : {
+       "comment" : "indication of when alerts will be unmuted (1: time when alerts unmute)",
+       "localizations" : {
+@@ -39850,6 +39947,9 @@
+         }
+       }
+     },
++    "Until I change it" : {
++      "comment" : "Activity duration that stays on until cleared"
++    },
+     "Until I enter carbs" : {
+       "comment" : "The title of a target alert action specifying pre-meal targets duration for 1 hour or until the user enters carbs (whichever comes first).",
+       "localizations" : {
+@@ -40040,6 +40140,9 @@
+         }
+       }
+     },
++    "Until you change it" : {
++      "comment" : "Home screen subtitle for an activity level without an end time"
++    },
+     "Urgent Low" : {
+       "localizations" : {
+         "da" : {
+@@ -41385,6 +41488,9 @@
+         }
+       }
+     },
++    "Workout" : {
++      "comment" : "Default activity level name for exercise"
++    },
+     "Workout Targets" : {
+       "comment" : "The label of the workout mode toggle button",
+       "localizations" : {
+diff --git a/Loop/Managers/DeviceDataManager.swift b/Loop/Managers/DeviceDataManager.swift
+index 3d07128e..5f0c01c6 100644
+--- a/Loop/Managers/DeviceDataManager.swift
++++ b/Loop/Managers/DeviceDataManager.swift
+@@ -450,6 +450,12 @@ final class DeviceDataManager {
+         
+         setupPump()
+         setupCGM()
++
++        if FeatureFlags.simpleInsulinDeliveryMode, loopManager.settings.dosingEnabled {
++            loopManager.mutateSettings { settings in
++                settings.dosingEnabled = false
++            }
++        }
+                 
+         cgmStalenessMonitor.$cgmDataIsStale
+             .combineLatest($cgmHasValidSensorSession)
+@@ -1638,10 +1644,30 @@ extension DeviceDataManager : RemoteDataServicesManagerDelegate {
+     }
+ }
+ 
++private enum SimpleInsulinDeliveryError: LocalizedError {
++    case invalidBasalSchedule
++
++    var errorDescription: String? {
++        switch self {
++        case .invalidBasalSchedule:
++            return NSLocalizedString("Unable to save basal schedule", comment: "Error when a basal schedule cannot be saved without a pump")
++        }
++    }
++}
++
+ extension DeviceDataManager: TherapySettingsViewModelDelegate {
+     
+     func syncBasalRateSchedule(items: [RepeatingScheduleValue<Double>], completion: @escaping (Swift.Result<BasalRateSchedule, Error>) -> Void) {
+-        pumpManager?.syncBasalRateSchedule(items: items, completion: completion)
++        if let pumpManager {
++            pumpManager.syncBasalRateSchedule(items: items, completion: completion)
++            return
++        }
++
++        if let schedule = BasalRateSchedule(dailyItems: items) {
++            completion(.success(schedule))
++        } else {
++            completion(.failure(SimpleInsulinDeliveryError.invalidBasalSchedule))
++        }
+     }
+     
+     func syncDeliveryLimits(deliveryLimits: DeliveryLimits, completion: @escaping (Swift.Result<DeliveryLimits, Error>) -> Void) {
+@@ -1674,12 +1700,23 @@ extension DeviceDataManager: TherapySettingsViewModelDelegate {
+     }
+     
+     func pumpSupportedIncrements() -> PumpSupportedIncrements? {
+-        return pumpManager.map {
+-            PumpSupportedIncrements(basalRates: $0.supportedBasalRates,
+-                                    bolusVolumes: $0.supportedBolusVolumes,
+-                                    maximumBolusVolumes: $0.supportedMaximumBolusVolumes,
+-                                    maximumBasalScheduleEntryCount: $0.maximumBasalScheduleEntryCount)
++        if let pumpManager {
++            return PumpSupportedIncrements(basalRates: pumpManager.supportedBasalRates,
++                                           bolusVolumes: pumpManager.supportedBolusVolumes,
++                                           maximumBolusVolumes: pumpManager.supportedMaximumBolusVolumes,
++                                           maximumBasalScheduleEntryCount: pumpManager.maximumBasalScheduleEntryCount)
+         }
++
++        // Simple insulin delivery mode lets basal/max-bolus screens work before a pump is paired.
++        if FeatureFlags.simpleInsulinDeliveryMode {
++            let rates = stride(from: 0.05, through: 30.0, by: 0.05).map { $0 }
++            return PumpSupportedIncrements(basalRates: rates,
++                                           bolusVolumes: rates,
++                                           maximumBolusVolumes: rates,
++                                           maximumBasalScheduleEntryCount: 48)
++        }
++
++        return nil
+     }
+ }
+ 
+diff --git a/Loop/View Controllers/StatusTableViewController.swift b/Loop/View Controllers/StatusTableViewController.swift
+index 3e124fa7..56e11cb9 100644
+--- a/Loop/View Controllers/StatusTableViewController.swift	
++++ b/Loop/View Controllers/StatusTableViewController.swift	
+@@ -54,6 +54,11 @@ final class StatusTableViewController: LoopChartsTableViewController {
+         tableView.register(BolusProgressTableViewCell.nib(), forCellReuseIdentifier: BolusProgressTableViewCell.className)
+         tableView.register(AlertPermissionsDisabledWarningCell.self, forCellReuseIdentifier: AlertPermissionsDisabledWarningCell.className)
+         tableView.register(MuteAlertsWarningCell.self, forCellReuseIdentifier: MuteAlertsWarningCell.className)
++        tableView.register(SimpleHomeHostingCell.self, forCellReuseIdentifier: SimpleHomeHostingCell.reuseID)
++        tableView.estimatedRowHeight = 360
++
++        ensureDefaultActivityLevels()
++        configureSimpleHomeDashboardActions()
+ 
+         if FeatureFlags.predictedGlucoseChartClampEnabled {
+             statusCharts.glucose.glucoseDisplayRange = LoopConstants.glucoseChartDefaultDisplayBoundClamped
+@@ -291,7 +296,17 @@ final class StatusTableViewController: LoopChartsTableViewController {
+             UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+         }
+ 
+-        if #available(iOS 26, *) {
++        if FeatureFlags.simpleInsulinDeliveryMode {
++            if #available(iOS 26, *) {
++                toolbarItems = [bolusItem, settingsItem]
++            } else {
++                toolbarItems = [
++                    bolusItem,
++                    flexibleSpace(),
++                    settingsItem
++                ]
++            }
++        } else if #available(iOS 26, *) {
+             toolbarItems = [carbsItem, preMealItem, bolusItem, workoutItem, settingsItem]
+         } else {
+             toolbarItems = [
+@@ -360,9 +375,22 @@ final class StatusTableViewController: LoopChartsTableViewController {
+     private var refreshContext = RefreshContext.all
+ 
+     private var shouldShowHUD: Bool {
+-        return !landscapeMode
++        return !landscapeMode && !FeatureFlags.simpleInsulinDeliveryMode
+     }
+ 
++    private var shouldShowSimpleHome: Bool {
++        return FeatureFlags.simpleInsulinDeliveryMode && !landscapeMode
++    }
++
++    private let simpleHomeViewModel = SimpleHomeDashboardViewModel()
++
++    private lazy var insulinAmountFormatter: NumberFormatter = {
++        let formatter = NumberFormatter()
++        formatter.minimumFractionDigits = 1
++        formatter.maximumFractionDigits = 2
++        return formatter
++    }()
++
+     private var shouldShowStatus: Bool {
+         return !landscapeMode && statusRowMode.hasRow
+     }
+@@ -626,6 +654,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
+             // Insulin Delivery
+             if let doseEntries = doseEntries {
+                 charts.setDoseEntries(doseEntries)
++                self.lastBolusSummary = self.makeLastBolus(from: doseEntries)
+             }
+             if let totalDelivery = totalDelivery {
+                 self.totalDelivery = totalDelivery
+@@ -670,6 +699,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
+             let statusRowMode = self.determineStatusRowMode()
+ 
+             self.updateBannerAndHUDandStatusRows(statusRowMode: statusRowMode, newSize: currentContext.newSize, animated: animated)
++            self.updateSimpleHomeDashboard()
+ 
+             self.redrawCharts()
+ 
+@@ -690,6 +720,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
+     private enum Section: Int, CaseIterable {
+         case alertWarning
+         case hud
++        case simpleHome
+         case status
+         case charts
+     }
+@@ -703,6 +734,14 @@ final class StatusTableViewController: LoopChartsTableViewController {
+         case cob
+     }
+ 
++    private var visibleChartRows: [ChartRow] {
++        FeatureFlags.simpleInsulinDeliveryMode ? [.iob, .dose] : Array(ChartRow.allCases)
++    }
++
++    private func chartRow(at indexPath: IndexPath) -> ChartRow {
++        visibleChartRows[indexPath.row]
++    }
++
+     // MARK: Glucose
+ 
+     private var eventualGlucoseDescription: String?
+@@ -711,6 +750,8 @@ final class StatusTableViewController: LoopChartsTableViewController {
+ 
+     private var currentIOBDescription: String?
+ 
++    private var lastBolusSummary: SimpleHomeDashboardViewModel.LastBolus?
++
+     // MARK: Dose
+ 
+     private var totalDelivery: Double?
+@@ -762,7 +803,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
+             statusRowMode = .bolusing(dose: dose)
+         } else if !onboardingManager.isComplete, deviceManager.pumpManager?.isOnboarded == true {
+             statusRowMode = .onboardingSuspended
+-        } else if onboardingManager.isComplete, deviceManager.isGlucoseValueStale {
++        } else if onboardingManager.isComplete, deviceManager.isGlucoseValueStale, !FeatureFlags.simpleInsulinDeliveryMode {
+             statusRowMode = .recommendManualGlucoseEntry
+         } else if let scheduleOverride = deviceManager.loopManager.settings.scheduleOverride,
+             !scheduleOverride.hasFinished()
+@@ -915,8 +956,10 @@ final class StatusTableViewController: LoopChartsTableViewController {
+             return shouldShowBannerWarning ? 1 : 0
+         case .hud:
+             return shouldShowHUD ? 1 : 0
++        case .simpleHome:
++            return shouldShowSimpleHome ? 1 : 0
+         case .charts:
+-            return ChartRow.allCases.count
++            return visibleChartRows.count
+         case .status:
+             return shouldShowStatus ? StatusRow.allCases.count : 0
+         }
+@@ -1019,11 +1062,19 @@ final class StatusTableViewController: LoopChartsTableViewController {
+             let cell = tableView.dequeueReusableCell(withIdentifier: HUDViewTableViewCell.className, for: indexPath) as! HUDViewTableViewCell
+             hudView = cell.hudView
+ 
++            return cell
++        case .simpleHome:
++            let cell = tableView.dequeueReusableCell(withIdentifier: SimpleHomeHostingCell.reuseID, for: indexPath) as! SimpleHomeHostingCell
++            cell.display(
++                SimpleHomeDashboardView(viewModel: simpleHomeViewModel)
++                    .environment(\.insulinTintColor, LoopUIColorPalette.default.insulinTintColor),
++                parent: self
++            )
+             return cell
+         case .charts:
+             let cell = tableView.dequeueReusableCell(withIdentifier: ChartTableViewCell.className, for: indexPath) as! ChartTableViewCell
+ 
+-            switch ChartRow(rawValue: indexPath.row)! {
++            switch chartRow(at: indexPath) {
+             case .glucose:
+                 cell.setChartGenerator(generator: { [weak self] (frame) in
+                     return self?.statusCharts.glucoseChart(withFrame: frame)?.view
+@@ -1176,7 +1227,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
+     private func tableView(_ tableView: UITableView, updateSubtitleFor cell: ChartTableViewCell, at indexPath: IndexPath) {
+         switch Section(rawValue: indexPath.section)! {
+         case .charts:
+-            switch ChartRow(rawValue: indexPath.row)! {
++            switch chartRow(at: indexPath) {
+             case .glucose:
+                 if let eventualGlucose = eventualGlucoseDescription {
+                     cell.setSubtitleLabel(label: String(format: NSLocalizedString("Eventually %@", comment: "The subtitle format describing eventual glucose. (1: localized glucose value description)"), eventualGlucose))
+@@ -1207,7 +1258,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
+                     cell.setSubtitleLabel(label: nil)
+                 }
+             }
+-        case .hud, .status, .alertWarning:
++        case .hud, .status, .alertWarning, .simpleHome:
+             break
+         }
+     }
+@@ -1222,13 +1273,13 @@ final class StatusTableViewController: LoopChartsTableViewController {
+             var availableSize = max(tableView.bounds.width, tableView.bounds.height)
+             availableSize -= (tableView.safeAreaInsets.top + tableView.safeAreaInsets.bottom + hudHeight)
+ 
+-            switch ChartRow(rawValue: indexPath.row)! {
++            switch chartRow(at: indexPath) {
+             case .glucose:
+                 return max(106, 0.37 * availableSize)
+             case .iob, .dose, .cob:
+-                return max(106, 0.21 * availableSize)
++                return max(FeatureFlags.simpleInsulinDeliveryMode ? 90 : 106, FeatureFlags.simpleInsulinDeliveryMode ? 0.16 * availableSize : 0.21 * availableSize)
+             }
+-        case .hud, .status, .alertWarning:
++        case .hud, .status, .alertWarning, .simpleHome:
+             return UITableView.automaticDimension
+         }
+     }
+@@ -1243,7 +1294,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
+                 tableView.deselectRow(at: indexPath, animated: true)
+                 presentUnmuteAlertConfirmation()
+             }
+-        case .hud:
++        case .hud, .simpleHome:
+             break
+         case .status:
+             switch StatusRow(rawValue: indexPath.row)! {
+@@ -1306,7 +1357,7 @@ final class StatusTableViewController: LoopChartsTableViewController {
+                 }
+             }
+         case .charts:
+-            switch ChartRow(rawValue: indexPath.row)! {
++            switch chartRow(at: indexPath) {
+             case .glucose:
+                 if automaticDosingStatus.automaticDosingEnabled || !FeatureFlags.simpleBolusCalculatorEnabled {
+                     performSegue(withIdentifier: PredictionTableViewController.className, sender: indexPath)
+@@ -1580,6 +1631,148 @@ final class StatusTableViewController: LoopChartsTableViewController {
+         presentSettings()
+     }
+ 
++    private func ensureDefaultActivityLevels() {
++        guard FeatureFlags.simpleInsulinDeliveryMode else { return }
++        guard deviceManager.loopManager.settings.overridePresets.isEmpty else { return }
++        deviceManager.loopManager.mutateSettings { settings in
++            settings.overridePresets = SimpleHomeDashboardViewModel.defaultActivityLevels()
++        }
++    }
++
++    private func configureSimpleHomeDashboardActions() {
++        simpleHomeViewModel.onSelectActivity = { [weak self] preset in
++            self?.selectActivityLevel(preset)
++        }
++        simpleHomeViewModel.onEditBasal = { [weak self] in
++            self?.presentBasalScheduleEditor()
++        }
++        simpleHomeViewModel.onAddActivity = { [weak self] in
++            self?.presentActivityLevelEditor(preset: nil)
++        }
++        simpleHomeViewModel.onEditActivity = { [weak self] preset in
++            self?.presentActivityLevelEditor(preset: preset)
++        }
++    }
++
++    private func makeLastBolus(from doseEntries: [DoseEntry]) -> SimpleHomeDashboardViewModel.LastBolus? {
++        guard let bolus = doseEntries.filter({ $0.type == .bolus }).max(by: { $0.startDate < $1.startDate }) else {
++            return nil
++        }
++        let units = bolus.deliveredUnits ?? bolus.programmedUnits
++        let amount = insulinAmountFormatter.string(from: NSNumber(value: units)).map { "\($0) U" } ?? "—"
++        let time: String
++        if Calendar.current.isDateInToday(bolus.startDate) {
++            time = DateFormatter.localizedString(from: bolus.startDate, dateStyle: .none, timeStyle: .short)
++        } else {
++            time = DateFormatter.localizedString(from: bolus.startDate, dateStyle: .short, timeStyle: .short)
++        }
++        return SimpleHomeDashboardViewModel.LastBolus(amountText: amount, timeText: time)
++    }
++
++    private func updateSimpleHomeDashboard() {
++        guard FeatureFlags.simpleInsulinDeliveryMode else { return }
++
++        let settings = deviceManager.loopManager.settings
++        let schedule = settings.basalRateSchedule
++        let items = schedule?.items ?? []
++        let scheduledRate = schedule?.value(at: Date())
++        let multiplier = settings.scheduleOverride?.hasFinished() == false
++            ? (settings.scheduleOverride?.settings.insulinNeedsScaleFactor ?? 1.0)
++            : 1.0
++        let currentBasalText: String
++        if let scheduledRate,
++           let formatted = insulinAmountFormatter.string(from: NSNumber(value: scheduledRate * multiplier)) {
++            currentBasalText = String(format: NSLocalizedString("Now %@ U/hr", comment: "Current basal rate on the home screen"), formatted)
++        } else {
++            currentBasalText = NSLocalizedString("Set a schedule", comment: "Home screen prompt when no basal schedule exists")
++        }
++
++        simpleHomeViewModel.apply(
++            activeInsulinText: currentIOBDescription ?? "0.0 U",
++            lastBolus: lastBolusSummary,
++            basalItems: items,
++            currentBasalText: currentBasalText,
++            activityLevels: settings.overridePresets,
++            activeOverride: settings.scheduleOverride
++        )
++    }
++
++    private func selectActivityLevel(_ preset: TemporaryScheduleOverridePreset?) {
++        deviceManager.loopManager.mutateSettings { settings in
++            if let preset {
++                settings.scheduleOverride = preset.createOverride(enactTrigger: .local)
++            } else {
++                settings.clearOverride()
++            }
++        }
++        updateSimpleHomeDashboard()
++    }
++
++    private func presentBasalScheduleEditor() {
++        let editor = BasalRateScheduleEditor(
++            mode: .settings,
++            therapySettingsViewModel: TherapySettingsViewModel(
++                therapySettings: deviceManager.loopManager.therapySettings,
++                sensitivityOverridesEnabled: FeatureFlags.sensitivityOverridesEnabled,
++                adultChildInsulinModelSelectionEnabled: FeatureFlags.adultChildInsulinModelSelectionEnabled,
++                delegate: deviceManager
++            )
++        )
++        .environmentObject(deviceManager.displayGlucosePreference)
++        .environment(\.appName, Bundle.main.bundleDisplayName)
++
++        let hostingController = DismissibleHostingController(
++            content: NavigationView { editor }.navigationViewStyle(.stack),
++            isModalInPresentation: false,
++            colorPalette: .default
++        )
++        present(hostingController, animated: true)
++    }
++
++    private func presentActivityLevelEditor(preset: TemporaryScheduleOverridePreset?) {
++        let editor = SimpleActivityLevelEditor(
++            preset: preset,
++            onSave: { [weak self] saved in
++                self?.saveActivityLevel(saved)
++            },
++            onDelete: preset.map { existing in
++                { [weak self] in
++                    self?.deleteActivityLevel(existing)
++                }
++            }
++        )
++        let hostingController = DismissibleHostingController(
++            content: NavigationView { editor }.navigationViewStyle(.stack),
++            isModalInPresentation: false,
++            colorPalette: .default
++        )
++        present(hostingController, animated: true)
++    }
++
++    private func saveActivityLevel(_ preset: TemporaryScheduleOverridePreset) {
++        deviceManager.loopManager.mutateSettings { settings in
++            if let index = settings.overridePresets.firstIndex(where: { $0.id == preset.id }) {
++                settings.overridePresets[index] = preset
++                if case .preset(let active) = settings.scheduleOverride?.context, active.id == preset.id {
++                    settings.scheduleOverride = preset.createOverride(enactTrigger: .local)
++                }
++            } else {
++                settings.overridePresets.append(preset)
++            }
++        }
++        updateSimpleHomeDashboard()
++    }
++
++    private func deleteActivityLevel(_ preset: TemporaryScheduleOverridePreset) {
++        deviceManager.loopManager.mutateSettings { settings in
++            settings.overridePresets.removeAll { $0.id == preset.id }
++            if case .preset(let active) = settings.scheduleOverride?.context, active.id == preset.id {
++                settings.clearOverride()
++            }
++        }
++        updateSimpleHomeDashboard()
++    }
++
+     private func presentSettings() {
+         let deletePumpDataFunc: () -> PumpManagerViewModel.DeleteTestingDataFunc? = { [weak self] in
+             (self?.deviceManager.pumpManager is TestingPumpManager) ? {
+@@ -2199,6 +2392,41 @@ extension StatusTableViewController {
+     }
+ }
+ 
++private final class SimpleHomeHostingCell: UITableViewCell {
++    static let reuseID = "SimpleHomeHostingCell"
++
++    private var hostingController: UIHostingController<AnyView>?
++
++    func display<Content: View>(_ view: Content, parent: UIViewController) {
++        let root = AnyView(view)
++        if let hostingController {
++            hostingController.rootView = root
++            hostingController.view.invalidateIntrinsicContentSize()
++            return
++        }
++
++        let controller = UIHostingController(rootView: root)
++        controller.view.backgroundColor = .clear
++        controller.view.translatesAutoresizingMaskIntoConstraints = false
++        if #available(iOS 16.0, *) {
++            controller.sizingOptions = [.intrinsicContentSize]
++        }
++        parent.addChild(controller)
++        contentView.addSubview(controller.view)
++        NSLayoutConstraint.activate([
++            controller.view.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
++            controller.view.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
++            controller.view.topAnchor.constraint(equalTo: contentView.topAnchor),
++            controller.view.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
++        ])
++        controller.didMove(toParent: parent)
++        hostingController = controller
++        selectionStyle = .none
++        backgroundColor = .clear
++        contentView.backgroundColor = .clear
++    }
++}
++
+ extension StatusTableViewController: BluetoothObserver {
+     func bluetoothDidUpdateState(_ state: BluetoothState) {
+         refreshContext.update(with: .status)
+@@ -2233,6 +2461,10 @@ extension StatusTableViewController: SettingsViewModelDelegate {
+             self.show(vc, sender: nil)
+         }
+     }
++
++    func removePump() {
++        deviceManager.pumpManager?.notifyDelegateOfDeactivation { }
++    }
+ }
+ 
+ // MARK: - Services delegation
+diff --git a/Loop/View Models/SettingsViewModel.swift b/Loop/View Models/SettingsViewModel.swift
+index d4b48766..2ae8945e 100644
+--- a/Loop/View Models/SettingsViewModel.swift	
++++ b/Loop/View Models/SettingsViewModel.swift	
+@@ -53,6 +53,7 @@ public protocol SettingsViewModelDelegate: AnyObject {
+     func dosingEnabledChanged(_: Bool)
+     func dosingStrategyChanged(_: AutomaticDosingStrategy)
+     func didTapIssueReport()
++    func removePump()
+     var closedLoopDescriptiveText: String? { get }
+ }
+ 
+@@ -69,6 +70,11 @@ public class SettingsViewModel: ObservableObject {
+     func didTapIssueReport() {
+         delegate?.didTapIssueReport()
+     }
++
++    func removePump() {
++        delegate?.removePump()
++        pumpIsSetUp = false
++    }
+     
+     var availableSupports: [SupportUI]
+     let pumpManagerSettingsViewModel: PumpManagerViewModel
+@@ -81,6 +87,7 @@ public class SettingsViewModel: ObservableObject {
+     let therapySettingsViewModelDelegate: TherapySettingsViewModelDelegate?
+ 
+     @Published var isClosedLoopAllowed: Bool
++    @Published var pumpIsSetUp: Bool
+ 
+     var closedLoopDescriptiveText: String? {
+         return delegate?.closedLoopDescriptiveText
+@@ -133,6 +140,7 @@ public class SettingsViewModel: ObservableObject {
+         self.sensitivityOverridesEnabled = sensitivityOverridesEnabled
+         self.closedLoopPreference = initialDosingEnabled
+         self.isClosedLoopAllowed = false
++        self.pumpIsSetUp = pumpManagerSettingsViewModel.isSetUp()
+         self.automaticDosingStrategy = automaticDosingStrategy
+         self.availableSupports = availableSupports
+         self.isOnboardingComplete = isOnboardingComplete
+diff --git a/Loop/Views/SettingsView.swift b/Loop/Views/SettingsView.swift
+index 4d65f5b2..4ed7da7d 100644
+--- a/Loop/Views/SettingsView.swift
++++ b/Loop/Views/SettingsView.swift
+@@ -32,6 +32,7 @@ public struct SettingsView: View {
+             
+             case deleteCGMData
+             case deletePumpData
++            case removePump
+         }
+         
+         enum ActionSheet: String, Identifiable {
+@@ -69,37 +70,43 @@ public struct SettingsView: View {
+         NavigationView {
+             List {
+                 Group {
+-                    loopSection
+-                    if versionUpdateViewModel.softwareUpdateAvailable {
++                    if !FeatureFlags.simpleInsulinDeliveryMode {
++                        loopSection
++                    }
++                    if !FeatureFlags.simpleInsulinDeliveryMode, versionUpdateViewModel.softwareUpdateAvailable {
+                         softwareUpdateSection
+                     }
+-                    if FeatureFlags.automaticBolusEnabled {
++                    if !FeatureFlags.simpleInsulinDeliveryMode, FeatureFlags.automaticBolusEnabled {
+                         dosingStrategySection
+                     }
+-                    alertManagementSection
+-                    if viewModel.pumpManagerSettingsViewModel.isSetUp() {
++                    if !FeatureFlags.simpleInsulinDeliveryMode {
++                        alertManagementSection
++                    }
++                    if FeatureFlags.simpleInsulinDeliveryMode || viewModel.pumpIsSetUp {
+                         configurationSection
+                     }
+                     deviceSettingsSection
+-                    if FeatureFlags.allowExperimentalFeatures {
++                    if !FeatureFlags.simpleInsulinDeliveryMode, FeatureFlags.allowExperimentalFeatures {
+                         favoriteFoodsSection
+                     }
+-                    if (viewModel.pumpManagerSettingsViewModel.isTestingDevice || viewModel.cgmManagerSettingsViewModel.isTestingDevice) && viewModel.showDeleteTestData {
++                    if !FeatureFlags.simpleInsulinDeliveryMode, (viewModel.pumpManagerSettingsViewModel.isTestingDevice || viewModel.cgmManagerSettingsViewModel.isTestingDevice) && viewModel.showDeleteTestData {
+                         deleteDataSection
+                     }
+                 }
+                 Group {
+-                    if viewModel.servicesViewModel.showServices {
++                    if !FeatureFlags.simpleInsulinDeliveryMode, viewModel.servicesViewModel.showServices {
+                         servicesSection
+                     }
+ 
+-                    ForEach(customSections) { customSectionName in
+-                        menuItemsForSection(name: customSectionName)
+-                    }
++                    if !FeatureFlags.simpleInsulinDeliveryMode {
++                        ForEach(customSections) { customSectionName in
++                            menuItemsForSection(name: customSectionName)
++                        }
+ 
+-                    supportSection
++                        supportSection
++                    }
+ 
+-                    if let profileExpiration = BuildDetails.default.profileExpiration, FeatureFlags.profileExpirationSettingsViewEnabled {
++                    if !FeatureFlags.simpleInsulinDeliveryMode, let profileExpiration = BuildDetails.default.profileExpiration, FeatureFlags.profileExpirationSettingsViewEnabled {
+                         appExpirationSection(profileExpiration: profileExpiration)
+                     }
+                 }
+@@ -113,6 +120,13 @@ public struct SettingsView: View {
+                     return makeDeleteAlert(for: self.viewModel.cgmManagerSettingsViewModel)
+                 case .deletePumpData:
+                     return makeDeleteAlert(for: self.viewModel.pumpManagerSettingsViewModel)
++                case .removePump:
++                    return SwiftUI.Alert(
++                        title: Text(NSLocalizedString("Remove Pump", comment: "Title of alert to remove the current pump")),
++                        message: Text(NSLocalizedString("This removes the current pump so you can add a different one.", comment: "Confirmation message before removing the current pump")),
++                        primaryButton: .cancel(),
++                        secondaryButton: .destructive(Text(NSLocalizedString("Remove", comment: "Button to confirm pump removal")), action: viewModel.removePump)
++                    )
+                 }
+             }
+             .sheet(item: $sheet) { sheet in
+@@ -269,22 +283,56 @@ extension SettingsView {
+         .environment(\.insulinTintColor, self.insulinTintColor)
+     }
+ 
++    private func makeTherapySettingsViewModel() -> TherapySettingsViewModel {
++        TherapySettingsViewModel(
++            therapySettings: viewModel.therapySettings(),
++            sensitivityOverridesEnabled: FeatureFlags.sensitivityOverridesEnabled,
++            adultChildInsulinModelSelectionEnabled: FeatureFlags.adultChildInsulinModelSelectionEnabled,
++            delegate: viewModel.therapySettingsViewModelDelegate
++        )
++    }
++
+     private var configurationSection: some View {
+-        Section(header: SectionHeader(label: NSLocalizedString("Configuration", comment: "The title of the Configuration section in settings"))) {
+-            NavigationLink(destination: therapySettingsView) {
+-                LargeButton(action: { },
+-                            includeArrow: false,
+-                            imageView: Image("Therapy Icon"),
+-                            label: NSLocalizedString("Therapy Settings", comment: "Title text for button to Therapy Settings"),
+-                            descriptiveText: NSLocalizedString("Diabetes Treatment", comment: "Descriptive text for Therapy Settings"))
+-            }
++        Section(header: SectionHeader(label: FeatureFlags.simpleInsulinDeliveryMode
++                                     ? NSLocalizedString("Insulin", comment: "The title of the simplified insulin section in settings")
++                                     : NSLocalizedString("Configuration", comment: "The title of the Configuration section in settings"))) {
++            if FeatureFlags.simpleInsulinDeliveryMode {
++                if let basalItems = viewModel.therapySettings().basalRateSchedule?.items {
++                    BasalScheduleProfileChart(items: basalItems)
++                        .padding(.vertical, 4)
++                }
+ 
+-            ForEach(pluginMenuItems.filter {$0.section == .configuration}) { item in
+-                item.view
+-            }
++                NavigationLink(destination: BasalRateScheduleEditor(mode: .settings, therapySettingsViewModel: makeTherapySettingsViewModel())) {
++                    LargeButton(action: { },
++                                includeArrow: false,
++                                imageView: Image("Therapy Icon"),
++                                label: NSLocalizedString("Daily Basal Schedule", comment: "Title text for button to daily basal schedule"),
++                                descriptiveText: NSLocalizedString("Different rates throughout the day", comment: "Descriptive text for daily basal schedule"))
++                }
+ 
+-            if FeatureFlags.allowAlgorithmExperiments {
+-                algorithmExperimentsSection
++                NavigationLink(destination: DeliveryLimitsEditor(mode: .settings, therapySettingsViewModel: makeTherapySettingsViewModel())) {
++                    LargeButton(action: { },
++                                includeArrow: false,
++                                imageView: Image("Therapy Icon"),
++                                label: NSLocalizedString("Maximum Bolus", comment: "Title text for button to delivery limits"),
++                                descriptiveText: NSLocalizedString("Safety limit for each bolus", comment: "Descriptive text for delivery limits in simple mode"))
++                }
++            } else {
++                NavigationLink(destination: therapySettingsView) {
++                    LargeButton(action: { },
++                                includeArrow: false,
++                                imageView: Image("Therapy Icon"),
++                                label: NSLocalizedString("Therapy Settings", comment: "Title text for button to Therapy Settings"),
++                                descriptiveText: NSLocalizedString("Diabetes Treatment", comment: "Descriptive text for Therapy Settings"))
++                }
++
++                ForEach(pluginMenuItems.filter {$0.section == .configuration}) { item in
++                    item.view
++                }
++
++                if FeatureFlags.allowAlgorithmExperiments {
++                    algorithmExperimentsSection
++                }
+             }
+         }
+     }
+@@ -300,19 +348,30 @@ extension SettingsView {
+     private var deviceSettingsSection: some View {
+         Section {
+             pumpSection
+-            cgmSection
++            if !FeatureFlags.simpleInsulinDeliveryMode {
++                cgmSection
++            }
+         }
+     }
+     
+     @ViewBuilder
+     private var pumpSection: some View {
+-        if viewModel.pumpManagerSettingsViewModel.isSetUp() {
++        if viewModel.pumpIsSetUp {
+             LargeButton(action: self.viewModel.pumpManagerSettingsViewModel.didTap,
+                         includeArrow: true,
+                         imageView: deviceImage(uiImage: viewModel.pumpManagerSettingsViewModel.image()),
+                         label: viewModel.pumpManagerSettingsViewModel.name(),
+                         descriptiveText: NSLocalizedString("Insulin Pump", comment: "Descriptive text for Insulin Pump"))
+-        } else if viewModel.isOnboardingComplete {
++            if FeatureFlags.simpleInsulinDeliveryMode {
++                Button(action: { alert = .removePump }) {
++                    HStack {
++                        Spacer()
++                        Text(NSLocalizedString("Remove Pump", comment: "Button to remove the current pump")).accentColor(.destructive)
++                        Spacer()
++                    }
++                }
++            }
++        } else if viewModel.isOnboardingComplete || FeatureFlags.simpleInsulinDeliveryMode {
+             LargeButton(action: { actionSheet = .pumpPicker },
+                         includeArrow: false,
+                         imageView: plusImage,
+diff --git a/Loop/Views/SimpleBolusView.swift b/Loop/Views/SimpleBolusView.swift
+index 044b3dc4..d50eba8e 100644
+--- a/Loop/Views/SimpleBolusView.swift
++++ b/Loop/Views/SimpleBolusView.swift
+@@ -34,6 +34,9 @@ struct SimpleBolusView: View {
+     }
+     
+     var title: String {
++        if FeatureFlags.simpleInsulinDeliveryMode {
++            return NSLocalizedString("Bolus", comment: "Title of bolus view in simple insulin delivery mode")
++        }
+         if viewModel.displayMealEntry {
+             return NSLocalizedString("Simple Meal Calculator", comment: "Title of simple bolus view when displaying meal entry")
+         } else {
+@@ -45,7 +48,9 @@ struct SimpleBolusView: View {
+         GeometryReader { geometry in
+             VStack(spacing: 0) {
+                 List() {
+-                    self.infoSection
++                    if !FeatureFlags.simpleInsulinDeliveryMode {
++                        self.infoSection
++                    }
+                     self.summarySection
+                 }
+                 // As of iOS 13, we can't programmatically scroll to the Bolus entry text field.  This ugly hack scoots the
+@@ -109,11 +114,13 @@ struct SimpleBolusView: View {
+     
+     private var summarySection: some View {
+         Section {
+-            if viewModel.displayMealEntry {
++            if !FeatureFlags.simpleInsulinDeliveryMode, viewModel.displayMealEntry {
+                 carbEntryRow
+             }
+-            glucoseEntryRow
+-            recommendedBolusRow
++            if !FeatureFlags.simpleInsulinDeliveryMode {
++                glucoseEntryRow
++                recommendedBolusRow
++            }
+             bolusEntryRow
+         }
+     }
+diff --git a/Loop/Views/SimpleHomeDashboardView.swift b/Loop/Views/SimpleHomeDashboardView.swift
+new file mode 100644
+index 00000000..51207f57
+--- /dev/null
++++ b/Loop/Views/SimpleHomeDashboardView.swift
+@@ -0,0 +1,351 @@
++//
++//  SimpleHomeDashboardView.swift
++//  Loop
++//
++
++import SwiftUI
++import HealthKit
++import LoopKit
++import LoopKitUI
++
++final class SimpleHomeDashboardViewModel: ObservableObject {
++    struct LastBolus {
++        var amountText: String
++        var timeText: String
++    }
++
++    @Published var activeInsulinText: String
++    @Published var lastBolus: LastBolus?
++    @Published var basalItems: [RepeatingScheduleValue<Double>]
++    @Published var currentBasalText: String
++    @Published var activityLevels: [TemporaryScheduleOverridePreset]
++    @Published var activeActivityID: UUID?
++    @Published var activeActivityDetail: String?
++
++    var onSelectActivity: (TemporaryScheduleOverridePreset?) -> Void = { _ in }
++    var onEditBasal: () -> Void = {}
++    var onAddActivity: () -> Void = {}
++    var onEditActivity: (TemporaryScheduleOverridePreset) -> Void = { _ in }
++
++    init() {
++        self.activeInsulinText = "—"
++        self.lastBolus = nil
++        self.basalItems = []
++        self.currentBasalText = "—"
++        self.activityLevels = []
++        self.activeActivityID = nil
++        self.activeActivityDetail = nil
++    }
++
++    static func defaultActivityLevels() -> [TemporaryScheduleOverridePreset] {
++        [
++            TemporaryScheduleOverridePreset(
++                symbol: "🏋️",
++                name: NSLocalizedString("Workout", comment: "Default activity level name for exercise"),
++                settings: TemporaryScheduleOverrideSettings(unit: .milligramsPerDeciliter, targetRange: nil, insulinNeedsScaleFactor: 0.5),
++                duration: .finite(.hours(2))
++            ),
++            TemporaryScheduleOverridePreset(
++                symbol: "🚶",
++                name: NSLocalizedString("Active", comment: "Default activity level name for being active"),
++                settings: TemporaryScheduleOverrideSettings(unit: .milligramsPerDeciliter, targetRange: nil, insulinNeedsScaleFactor: 0.8),
++                duration: .finite(.hours(3))
++            ),
++            TemporaryScheduleOverridePreset(
++                symbol: "😌",
++                name: NSLocalizedString("Chilling", comment: "Default activity level name for resting"),
++                settings: TemporaryScheduleOverrideSettings(unit: .milligramsPerDeciliter, targetRange: nil, insulinNeedsScaleFactor: 1.0),
++                duration: .indefinite
++            )
++        ]
++    }
++
++    func apply(
++        activeInsulinText: String,
++        lastBolus: LastBolus?,
++        basalItems: [RepeatingScheduleValue<Double>],
++        currentBasalText: String,
++        activityLevels: [TemporaryScheduleOverridePreset],
++        activeOverride: TemporaryScheduleOverride?
++    ) {
++        self.activeInsulinText = activeInsulinText
++        self.lastBolus = lastBolus
++        self.basalItems = basalItems
++        self.currentBasalText = currentBasalText
++        self.activityLevels = activityLevels
++
++        if let activeOverride, !activeOverride.hasFinished() {
++            switch activeOverride.context {
++            case .preset(let preset):
++                activeActivityID = preset.id
++            default:
++                activeActivityID = nil
++            }
++
++            switch activeOverride.duration {
++            case .finite:
++                let endTime = DateFormatter.localizedString(from: activeOverride.activeInterval.end, dateStyle: .none, timeStyle: .short)
++                activeActivityDetail = String(format: NSLocalizedString("Until %@", comment: "Home screen subtitle for a timed activity level"), endTime)
++            case .indefinite:
++                activeActivityDetail = NSLocalizedString("Until you change it", comment: "Home screen subtitle for an activity level without an end time")
++            }
++        } else {
++            activeActivityID = nil
++            activeActivityDetail = nil
++        }
++    }
++}
++
++struct SimpleHomeDashboardView: View {
++    @ObservedObject var viewModel: SimpleHomeDashboardViewModel
++    @Environment(\.insulinTintColor) private var insulinTintColor
++
++    var body: some View {
++        VStack(alignment: .leading, spacing: 16) {
++            statsRow
++            activitySection
++            basalSection
++        }
++        .padding(.horizontal, 16)
++        .padding(.vertical, 12)
++    }
++
++    private var statsRow: some View {
++        HStack(spacing: 12) {
++            statCard(
++                title: NSLocalizedString("Active Insulin", comment: "Home screen title for insulin on board"),
++                value: viewModel.activeInsulinText,
++                detail: NSLocalizedString("Still working", comment: "Home screen caption for active insulin")
++            )
++            statCard(
++                title: NSLocalizedString("Last Bolus", comment: "Home screen title for most recent bolus"),
++                value: viewModel.lastBolus?.amountText ?? NSLocalizedString("None yet", comment: "Home screen value when no bolus has been given"),
++                detail: viewModel.lastBolus?.timeText ?? " "
++            )
++        }
++    }
++
++    private func statCard(title: String, value: String, detail: String) -> some View {
++        VStack(alignment: .leading, spacing: 6) {
++            Text(title)
++                .font(.subheadline)
++                .foregroundColor(.secondary)
++            Text(value)
++                .font(.title2)
++                .bold()
++                .foregroundColor(insulinTintColor)
++            Text(detail)
++                .font(.footnote)
++                .foregroundColor(.secondary)
++        }
++        .frame(maxWidth: .infinity, alignment: .leading)
++        .padding(14)
++        .background(Color(.secondarySystemBackground))
++        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
++    }
++
++    private var activitySection: some View {
++        VStack(alignment: .leading, spacing: 10) {
++            HStack {
++                Text(NSLocalizedString("Activity", comment: "Home screen title for activity levels"))
++                    .font(.headline)
++                Spacer()
++                Button(action: viewModel.onAddActivity) {
++                    Label(NSLocalizedString("Add", comment: "Button to add an activity level"), systemImage: "plus")
++                        .font(.subheadline.weight(.semibold))
++                }
++            }
++
++            ScrollView(.horizontal, showsIndicators: false) {
++                HStack(spacing: 8) {
++                    activityChip(
++                        title: NSLocalizedString("Normal", comment: "Activity level that uses the usual basal schedule"),
++                        symbol: "🏠",
++                        isSelected: viewModel.activeActivityID == nil
++                    ) {
++                        viewModel.onSelectActivity(nil)
++                    }
++
++                    ForEach(viewModel.activityLevels, id: \.id) { level in
++                        activityChip(
++                            title: level.name,
++                            symbol: level.symbol,
++                            isSelected: viewModel.activeActivityID == level.id
++                        ) {
++                            if viewModel.activeActivityID == level.id {
++                                viewModel.onSelectActivity(nil)
++                            } else {
++                                viewModel.onSelectActivity(level)
++                            }
++                        }
++                        .onLongPressGesture {
++                            viewModel.onEditActivity(level)
++                        }
++                    }
++                }
++            }
++
++            if let detail = viewModel.activeActivityDetail, viewModel.activeActivityID != nil {
++                Text(detail)
++                    .font(.footnote)
++                    .foregroundColor(.secondary)
++            } else {
++                Text(NSLocalizedString("Hold an activity to edit it.", comment: "Hint explaining how to edit a home screen activity level"))
++                    .font(.footnote)
++                    .foregroundColor(.secondary)
++            }
++        }
++    }
++
++    private func activityChip(title: String, symbol: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
++        Button(action: action) {
++            HStack(spacing: 6) {
++                Text(symbol)
++                Text(title)
++                    .font(.subheadline.weight(.semibold))
++            }
++            .padding(.horizontal, 12)
++            .padding(.vertical, 8)
++            .background(isSelected ? insulinTintColor : Color(.secondarySystemBackground))
++            .foregroundColor(isSelected ? Color.white : Color.primary)
++            .clipShape(Capsule())
++        }
++        .buttonStyle(.plain)
++    }
++
++    private var basalSection: some View {
++        Button(action: viewModel.onEditBasal) {
++            VStack(alignment: .leading, spacing: 10) {
++                HStack {
++                    Text(NSLocalizedString("Daily Basal", comment: "Home screen title for the basal schedule graph"))
++                        .font(.headline)
++                        .foregroundColor(.primary)
++                    Spacer()
++                    Text(viewModel.currentBasalText)
++                        .font(.subheadline)
++                        .foregroundColor(.secondary)
++                    Image(systemName: "chevron.right")
++                        .font(.footnote.weight(.semibold))
++                        .foregroundColor(.secondary)
++                }
++
++                BasalScheduleProfileChart(items: viewModel.basalItems)
++            }
++            .padding(14)
++            .background(Color(.secondarySystemBackground))
++            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
++        }
++        .buttonStyle(.plain)
++    }
++}
++
++struct SimpleActivityLevelEditor: View {
++    @Environment(\.dismissAction) private var dismiss
++
++    @State private var name: String
++    @State private var symbol: String
++    @State private var basalPercent: Double
++    @State private var durationHours: Double
++
++    private let existingID: UUID?
++    private let onSave: (TemporaryScheduleOverridePreset) -> Void
++    private let onDelete: (() -> Void)?
++
++    private static let symbols = ["🏋️", "🚶", "😌", "😴", "💼", "🍽️", "🚗", "🎉"]
++
++    init(
++        preset: TemporaryScheduleOverridePreset?,
++        onSave: @escaping (TemporaryScheduleOverridePreset) -> Void,
++        onDelete: (() -> Void)?
++    ) {
++        existingID = preset?.id
++        _name = State(initialValue: preset?.name ?? "")
++        _symbol = State(initialValue: preset?.symbol ?? "😌")
++        _basalPercent = State(initialValue: (preset?.settings.insulinNeedsScaleFactor ?? 1.0) * 100)
++        switch preset?.duration {
++        case .finite(let interval):
++            _durationHours = State(initialValue: interval.hours)
++        default:
++            _durationHours = State(initialValue: 0)
++        }
++        self.onSave = onSave
++        self.onDelete = onDelete
++    }
++
++    var body: some View {
++        Form {
++            Section(header: Text(NSLocalizedString("Name", comment: "Section title for activity level name"))) {
++                TextField(NSLocalizedString("Chilling", comment: "Placeholder for a new activity level name"), text: $name)
++                ScrollView(.horizontal, showsIndicators: false) {
++                    HStack {
++                        ForEach(Self.symbols, id: \.self) { option in
++                            Button(action: { symbol = option }) {
++                                Text(option)
++                                    .font(.title2)
++                                    .padding(8)
++                                    .background(symbol == option ? Color.accentColor.opacity(0.2) : Color.clear)
++                                    .clipShape(Circle())
++                            }
++                            .buttonStyle(.plain)
++                        }
++                    }
++                }
++            }
++
++            Section(
++                header: Text(NSLocalizedString("Basal amount", comment: "Section title for activity basal percentage")),
++                footer: Text(NSLocalizedString("100% keeps the usual daily basal. Lower this for exercise.", comment: "Explanation of activity basal percentage"))
++            ) {
++                Stepper(value: $basalPercent, in: 10...200, step: 10) {
++                    Text(String(format: NSLocalizedString("%d%% of usual basal", comment: "Activity level basal percentage"), Int(basalPercent)))
++                }
++            }
++
++            Section(header: Text(NSLocalizedString("How long", comment: "Section title for activity duration"))) {
++                Picker(NSLocalizedString("Duration", comment: "Picker title for activity duration"), selection: $durationHours) {
++                    Text(NSLocalizedString("Until I change it", comment: "Activity duration that stays on until cleared")).tag(0.0)
++                    Text(NSLocalizedString("1 hour", comment: "One hour activity duration")).tag(1.0)
++                    Text(NSLocalizedString("2 hours", comment: "Two hour activity duration")).tag(2.0)
++                    Text(NSLocalizedString("4 hours", comment: "Four hour activity duration")).tag(4.0)
++                    Text(NSLocalizedString("8 hours", comment: "Eight hour activity duration")).tag(8.0)
++                }
++            }
++
++            if onDelete != nil {
++                Section {
++                    Button(role: .destructive, action: delete) {
++                        Text(NSLocalizedString("Delete Activity", comment: "Button to delete an activity level"))
++                    }
++                }
++            }
++        }
++        .navigationBarTitle(existingID == nil
++                            ? NSLocalizedString("Add Activity", comment: "Title for adding an activity level")
++                            : NSLocalizedString("Edit Activity", comment: "Title for editing an activity level"),
++                            displayMode: .inline)
++        .navigationBarItems(
++            leading: Button(NSLocalizedString("Cancel", comment: "Cancel activity editor"), action: dismiss),
++            trailing: Button(NSLocalizedString("Save", comment: "Save activity editor"), action: save)
++                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
++        )
++    }
++
++    private func save() {
++        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
++        let duration: TemporaryScheduleOverride.Duration = durationHours == 0 ? .indefinite : .finite(.hours(durationHours))
++        let preset = TemporaryScheduleOverridePreset(
++            id: existingID ?? UUID(),
++            symbol: symbol,
++            name: trimmed,
++            settings: TemporaryScheduleOverrideSettings(unit: .milligramsPerDeciliter, targetRange: nil, insulinNeedsScaleFactor: basalPercent / 100),
++            duration: duration
++        )
++        onSave(preset)
++        dismiss()
++    }
++
++    private func delete() {
++        onDelete?()
++        dismiss()
++    }
++}
